@@ -14,7 +14,6 @@ from random_eraser import get_random_eraser
 
 logging.basicConfig(level=logging.DEBUG)
 
-
 class Schedule:
     def __init__(self, nb_epochs):
         self.epochs = nb_epochs
@@ -34,7 +33,7 @@ def get_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--input", "-i", type=str, required=True,
                         help="path to input database mat file")
-    parser.add_argument("--batch_size", type=int, default=128,
+    parser.add_argument("--batch_size", type=int, default=32,
                         help="batch size")
     parser.add_argument("--nb_epochs", type=int, default=10,
                         help="number of epochs")

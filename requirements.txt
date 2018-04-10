@@ -1,3 +1,4 @@
 scipy
 dlib
 tf-nightly-gpu
+tqdm

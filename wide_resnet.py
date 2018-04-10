@@ -203,7 +203,7 @@ class WideResNet:
                               name="pred_age")(flatten)
 
         model = Model(inputs=inputs, outputs=[predictions_g, predictions_a])
-        model = multi_gpu_model(model, gpus=4)
+        model = multi_gpu_model(model, gpus=2)
 
         return model
 

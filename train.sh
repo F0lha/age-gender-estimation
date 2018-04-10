@@ -7,4 +7,8 @@ pip uninstall -y tensorflow-gpu
 
 pip install -r requirements.txt
 
-python train.py -i ../../dataset/wiki.mat
+python create_db.py -o ../../dataset/wiki.mat
+
+python train.py --input ../../dataset/wiki.mat
+
+mv models ../../dataset/models
