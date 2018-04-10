@@ -1,0 +1,3 @@
+scipy
+dlib
+tf-nightly-gpu
