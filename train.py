@@ -33,11 +33,11 @@ def get_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--input", "-i", type=str, required=True,
                         help="path to input database mat file")
-    parser.add_argument("--batch_size", type=int, default=32,
+    parser.add_argument("--batch_size", type=int, default=128,
                         help="batch size")
-    parser.add_argument("--nb_epochs", type=int, default=10,
+    parser.add_argument("--nb_epochs", type=int, default=30,
                         help="number of epochs")
-    parser.add_argument("--depth", type=int, default=16,
+    parser.add_argument("--depth", type=int, default=22,
                         help="depth of network (should be 10, 16, 22, 28, ...)")
     parser.add_argument("--width", type=int, default=8,
                         help="width of network")
@@ -58,6 +58,9 @@ def main():
     k = args.width
     validation_split = args.validation_split
     use_augmentation = args.aug
+    
+    
+    os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
 
     logging.debug("Loading data...")
     image, gender, age, _, image_size, _ = load_data(input_path)
@@ -65,14 +68,16 @@ def main():
     y_data_g = np_utils.to_categorical(gender, 2)
     y_data_a = np_utils.to_categorical(age, 101)
 
-    model = WideResNet(image_size, depth=depth, k=k)()
-    sgd = SGD(lr=0.1, momentum=0.9, nesterov=True)
+    model = WideResNet(image_size, depth=22, k=k)()
+    sgd = SGD(lr=0.01, momentum=0.9, nesterov=True)
     model.compile(optimizer=sgd, loss=["categorical_crossentropy", "categorical_crossentropy"],
                   metrics=['accuracy'])
 
     logging.debug("Model summary...")
     model.count_params()
     model.summary()
+    
+    model.load_weights(os.path.join("checkpoints", "weights.03-4.78.hdf5"))
 
     logging.debug("Saving model...")
     mk_dir("models")

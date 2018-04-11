@@ -3,6 +3,7 @@
 import logging
 import sys
 import numpy as np
+import os
 from keras.models import Model
 from keras.layers import Input, Activation, add, Dense, Flatten, Dropout
 from keras.layers.convolutional import Conv2D, AveragePooling2D
