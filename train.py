@@ -60,7 +60,7 @@ def main():
     use_augmentation = args.aug
     
     
-    os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
+    os.environ["CUDA_VISIBLE_DEVICES"]="2,3"
 
     logging.debug("Loading data...")
     image, gender, age, _, image_size, _ = load_data(input_path)
