@@ -65,6 +65,7 @@ def main():
     logging.debug("Loading data...")
     image, gender, age, _, image_size, _ = load_data(input_path)
     X_data = image
+    print(age.shape)
     y_data_g = np_utils.to_categorical(gender, 2)
     y_data_a = np_utils.to_categorical(age, 101)
 
