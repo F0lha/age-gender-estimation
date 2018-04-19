@@ -97,15 +97,16 @@ class MyModel:
         for layer in vgg_model.layers:
             layer.trainable = False
             
-        x = Dense(units=2048, activation="relu")(out)
+        x = Dense(units=4096,kernel_regularizer=l2(0.0005),kernel_initializer="he_normal", activation="relu")(out)
         x = Dropout(0.5)(x)
-        x = Dense(units=2048, activation="relu")(x)
+        x = Dense(units=4096,kernel_regularizer=l2(0.0005),kernel_initializer="he_normal", activation="relu")(x)
         x = Dropout(0.5)(x)
-        predictions = Dense(units=101, kernel_initializer="he_normal", use_bias=False,
+        class_pred = Dense(units=101, kernel_initializer="he_normal", use_bias=False,
                               kernel_regularizer=l2(0.0005), activation="softmax",
                               name="pred_age")(x)
+        regression = Dense(units=1, name="regress_age")(x)
 
-        model = Model(vgg_model.input, predictions)
+        model = Model(vgg_model.input, [class_pred,regression])
         
         #model.load_weights("models/WRN_16_8.h5");
 

@@ -15,6 +15,7 @@ from MyModel import MyModel
 from tensorflow.python import debug as tf_debug
 import keras.backend as K
 import Augmentor
+from collections import Counter
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -37,7 +38,7 @@ def get_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--input", "-i", type=str, required=True,
                         help="path to input database mat file")
-    parser.add_argument("--batch_size", type=int, default=32,
+    parser.add_argument("--batch_size", type=int, default=16,
                         help="batch size")
     parser.add_argument("--nb_epochs", type=int, default=100,
                         help="number of epochs")
@@ -51,6 +52,30 @@ def get_args():
                         help="use data augmentation if set true")
     args = parser.parse_args()
     return args
+
+def get_class_weights(y, smooth_factor=0):
+    """
+    Returns the weights for each class based on the frequencies of the samples
+    :param smooth_factor: factor that smooths extremely uneven weights
+    :param y: list of true labels (the labels must be hashable)
+    :return: dictionary with the weight for each class
+    """
+    counter = Counter(y)
+
+    if smooth_factor > 0:
+        p = max(counter.values()) * smooth_factor
+        for k in counter.keys():
+            counter[k] += p
+
+    majority = max(counter.values())
+
+    return {cls: float(majority) / count for cls, count in counter.items()}
+
+def generate_data_generator(generator):
+    for x_batch,y_batch in generator:
+            ages = np.arange(0, 101).reshape(101, 1)
+            round_age = [int(pred.dot(ages).flatten()) for pred in y_batch]
+            yield x_batch, [y_batch, round_age]
 
 def main():
     args = get_args()
@@ -77,9 +102,9 @@ def main():
     #model = WideResNet(image_size, depth=22, k=k)()
     model = MyModel(image_size)()
     adam = Adam(lr=0.1)
-    sgd = SGD(lr=0.0001, momentum=0.9, nesterov=True, decay=0.00001)
-    model.compile(optimizer=adam, loss="categorical_crossentropy",
-                  metrics=['accuracy'])
+    sgd = SGD(lr=0.001, momentum=0.9, nesterov=True, decay=0.00001)
+    model.compile(optimizer=sgd, loss="categorical_crossentropy",
+                  metrics=['accuracy','MAE'])
 
     logging.debug("Model summary...")
     model.count_params()
@@ -93,6 +118,29 @@ def main():
         f.write(model.to_json())
 
     mk_dir("checkpoints")
+
+    train_datagen = ImageDataGenerator(
+        rescale=1./255,
+        shear_range=0.2,
+        horizontal_flip=True,
+        validation_split=0.2)
+    
+    train_generator = train_datagen.flow_from_directory(
+        '../../dataset/wiki_crop/new_database/',
+        target_size=(image_size, image_size),
+        batch_size=batch_size,
+        class_mode='categorical',
+        subset='training',
+        shuffle=True)
+    
+    val_generator = train_datagen.flow_from_directory(
+        '../../dataset/wiki_crop/new_database/',
+        target_size=(image_size, image_size),
+        batch_size=batch_size,
+        class_mode='categorical',
+        subset='validation',
+        shuffle=True)
+        
     callbacks = [LearningRateScheduler(schedule=Schedule(38138  // batch_size)),
                  ModelCheckpoint("checkpoints/weights.{epoch:02d}-{val_loss:.2f}.hdf5",
                                  monitor="val_loss",
@@ -100,34 +148,21 @@ def main():
                                  save_best_only=True,
                                  mode="auto")
                  ]
+    
 
-    train_datagen = ImageDataGenerator(
-        rescale=1./255,
-        shear_range=0.2,
-        zoom_range=0.2,
-        horizontal_flip=True,
-        validation_split=0.2
-        shuffle = True)
     
-    train_generator = train_datagen.flow_from_directory(
-        '../../dataset/wiki_crop/new_database/',
-        target_size=(image_size, image_size),
-        batch_size=batch_size,
-        class_mode='categorical',
-        subset='training')
+    class_weight = get_class_weights(train_generator.classes)
     
-    val_generator = train_datagen.flow_from_directory(
-        '../../dataset/wiki_crop/new_database/',
-        target_size=(image_size, image_size),
-        batch_size=batch_size,
-        class_mode='categorical',
-        subset='validation')
+    print(class_weight)
     
     h = model.fit_generator(
-        train_generator,
-        epochs=20,
-        validation_data=val_generator,
-        workers=12)
+        generate_data_generator(train_generator),
+        use_multiprocessing=True,
+        epochs=10,
+        validation_data=generate_data_generator(val_generator),
+        workers=12,
+        #class_weight=class_weight
+    )
 
     logging.debug("Saving weights...")
     model.save_weights(os.path.join("models", "WRN_{}_{}.h5".format(depth, k)), overwrite=True)

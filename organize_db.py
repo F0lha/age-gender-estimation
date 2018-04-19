@@ -57,7 +57,10 @@ def main():
             
         
         image = face_recognition.load_image_file(parent_folder + full_path[i][0])
-        face_locations = face_recognition.face_locations(image)[0]
+        face_locations = face_recognition.face_locations(image)
+        if len(face_locations) == 0:
+            continue
+        face_locations = face_locations[0]
         img = image[face_locations[0]:face_locations[2],face_locations[3]:face_locations[1],:]
         
         resized_image = cv2.resize(img, (224, 224)) 
