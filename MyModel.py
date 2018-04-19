@@ -5,7 +5,7 @@ import sys
 import numpy as np
 import os
 from keras.models import Model
-from keras.layers import Input, Activation, add, Dense, Flatten, Dropout
+from keras.layers import Input, Activation, add, Dense, Flatten, Dropout, GlobalAveragePooling2D,MaxPooling2D, LeakyReLU
 from keras.layers.convolutional import Conv2D, AveragePooling2D
 from keras.layers.normalization import BatchNormalization
 from keras.regularizers import l2
@@ -90,19 +90,24 @@ class MyModel:
         os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
         
         nb_class = 101
-        hidden_dim = 1024
+        vgg_model = VGGFace(include_top=False, input_shape=(self.image_size, self.image_size, 3), pooling='avg')
 
-        vgg_model = VGGFace(include_top=False, input_shape=(self.image_size, self.image_size, 3))
-        last_layer = vgg_model.layers[-1].output
-        x = Flatten(name='flatten')(last_layer)
-        #x = Dense(hidden_dim, activation='relu', name='fc6')(x)
-        out = Dense(nb_class, activation=self.activation, name='fc8')(x)
-
+        out = vgg_model.layers[-1].output
+        
         for layer in vgg_model.layers:
             layer.trainable = False
+            
+        x = Dense(units=2048, activation="relu")(out)
+        x = Dropout(0.5)(x)
+        x = Dense(units=2048, activation="relu")(x)
+        x = Dropout(0.5)(x)
+        predictions = Dense(units=101, kernel_initializer="he_normal", use_bias=False,
+                              kernel_regularizer=l2(0.0005), activation="softmax",
+                              name="pred_age")(x)
 
-        model = Model(vgg_model.input, out)
-        model.summary()
+        model = Model(vgg_model.input, predictions)
+        
+        #model.load_weights("models/WRN_16_8.h5");
 
         return model
         

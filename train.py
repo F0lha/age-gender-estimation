@@ -4,7 +4,7 @@ import argparse
 import os
 import numpy as np
 from keras.callbacks import LearningRateScheduler, ModelCheckpoint
-from keras.optimizers import SGD
+from keras.optimizers import SGD, Adam
 from keras.utils import np_utils
 from wide_resnet import WideResNet
 from utils import mk_dir, load_data
@@ -12,6 +12,9 @@ from keras.preprocessing.image import ImageDataGenerator
 from mixup_generator import MixupGenerator
 from random_eraser import get_random_eraser
 from MyModel import MyModel
+from tensorflow.python import debug as tf_debug
+import keras.backend as K
+import Augmentor
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -34,9 +37,9 @@ def get_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--input", "-i", type=str, required=True,
                         help="path to input database mat file")
-    parser.add_argument("--batch_size", type=int, default=64,
+    parser.add_argument("--batch_size", type=int, default=32,
                         help="batch size")
-    parser.add_argument("--nb_epochs", type=int, default=30,
+    parser.add_argument("--nb_epochs", type=int, default=100,
                         help="number of epochs")
     parser.add_argument("--depth", type=int, default=16,
                         help="depth of network (should be 10, 16, 22, 28, ...)")
@@ -49,7 +52,6 @@ def get_args():
     args = parser.parse_args()
     return args
 
-
 def main():
     args = get_args()
     input_path = args.input
@@ -60,18 +62,23 @@ def main():
     validation_split = args.validation_split
     use_augmentation = args.aug
     
+    image_size = 224
     
-    os.environ["CUDA_VISIBLE_DEVICES"]="2,3"
+    os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
 
-    logging.debug("Loading data...")
-    image, gender, age, _, image_size, _ = load_data(input_path)
-    X_data = image
-    print(age.shape)
-    y_data_a = np_utils.to_categorical(age, 101)
+    logging.debug("Loading data and Augmentor...")
+    
 
+    
+    #sess = K.get_session()
+    #sess = tf_debug.LocalCLIDebugWrapperSession(sess)
+    #K.set_session(sess)
+    
+    #model = WideResNet(image_size, depth=22, k=k)()
     model = MyModel(image_size)()
-    sgd = SGD(lr=0.01, momentum=0.9, nesterov=True)
-    model.compile(optimizer=sgd, loss="categorical_crossentropy",
+    adam = Adam(lr=0.1)
+    sgd = SGD(lr=0.0001, momentum=0.9, nesterov=True, decay=0.00001)
+    model.compile(optimizer=adam, loss="categorical_crossentropy",
                   metrics=['accuracy'])
 
     logging.debug("Model summary...")
@@ -86,7 +93,7 @@ def main():
         f.write(model.to_json())
 
     mk_dir("checkpoints")
-    callbacks = [LearningRateScheduler(schedule=Schedule(nb_epochs)),
+    callbacks = [LearningRateScheduler(schedule=Schedule(38138  // batch_size)),
                  ModelCheckpoint("checkpoints/weights.{epoch:02d}-{val_loss:.2f}.hdf5",
                                  monitor="val_loss",
                                  verbose=1,
@@ -94,39 +101,37 @@ def main():
                                  mode="auto")
                  ]
 
-    logging.debug("Running training...")
-
-    data_num = len(X_data)
-    indexes = np.arange(data_num)
-    np.random.shuffle(indexes)
-    X_data = X_data[indexes]
-    y_data_a = y_data_a[indexes]
-    train_num = int(data_num * (1 - validation_split))
-    X_train = X_data[:train_num]
-    X_test = X_data[train_num:]
-    y_train_a = y_data_a[:train_num]
-    y_test_a = y_data_a[train_num:]
-
-    if use_augmentation:
-        datagen = ImageDataGenerator(
-            width_shift_range=0.1,
-            height_shift_range=0.1,
-            horizontal_flip=True,
-            preprocessing_function=get_random_eraser(v_l=0, v_h=255))
-        training_generator = MixupGenerator(X_train, y_train_a, batch_size=batch_size, alpha=0.2,
-                                            datagen=datagen)()
-        hist = model.fit_generator(generator=training_generator,
-                                   steps_per_epoch=train_num // batch_size,
-                                   validation_data=(X_test,  y_test_a),
-                                   epochs=nb_epochs, verbose=1,
-                                   callbacks=callbacks)
-    else:
-        hist = model.fit(X_train,  y_train_a, batch_size=batch_size, epochs=nb_epochs, callbacks=callbacks,
-                         validation_data=(X_test,  y_test_a))
+    train_datagen = ImageDataGenerator(
+        rescale=1./255,
+        shear_range=0.2,
+        zoom_range=0.2,
+        horizontal_flip=True,
+        validation_split=0.2
+        shuffle = True)
+    
+    train_generator = train_datagen.flow_from_directory(
+        '../../dataset/wiki_crop/new_database/',
+        target_size=(image_size, image_size),
+        batch_size=batch_size,
+        class_mode='categorical',
+        subset='training')
+    
+    val_generator = train_datagen.flow_from_directory(
+        '../../dataset/wiki_crop/new_database/',
+        target_size=(image_size, image_size),
+        batch_size=batch_size,
+        class_mode='categorical',
+        subset='validation')
+    
+    h = model.fit_generator(
+        train_generator,
+        epochs=20,
+        validation_data=val_generator,
+        workers=12)
 
     logging.debug("Saving weights...")
     model.save_weights(os.path.join("models", "WRN_{}_{}.h5".format(depth, k)), overwrite=True)
-    pd.DataFrame(hist.history).to_hdf(os.path.join("models", "history_{}_{}.h5".format(depth, k)), "history")
+    #pd.DataFrame(hist.history).to_hdf(os.path.join("models", "history_{}_{}.h5".format(depth, k)), "history")
 
 
 if __name__ == '__main__':
