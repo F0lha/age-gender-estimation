@@ -38,7 +38,7 @@ def get_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--input", "-i", type=str, required=True,
                         help="path to input database mat file")
-    parser.add_argument("--batch_size", type=int, default=16,
+    parser.add_argument("--batch_size", type=int, default=32,
                         help="batch size")
     parser.add_argument("--nb_epochs", type=int, default=100,
                         help="number of epochs")
@@ -75,8 +75,13 @@ def generate_data_generator(generator):
     for x_batch,y_batch in generator:
             ages = np.arange(0, 101).reshape(101, 1)
             round_age = [int(pred.dot(ages).flatten()) for pred in y_batch]
-            yield x_batch, [y_batch, round_age]
+            yield x_batch, [y_batch, np.array(round_age)]
 
+def hiearcical_softmax_loss(y_true, y_pred):
+    pos = K.sum(y_true * y_pred, axis=-1)
+    neg = K.max((1.0 - y_true) * y_pred, axis=-1)
+    return K.mean(K.maximum(0.0, neg - pos + 1), axis=-1)
+            
 def main():
     args = get_args()
     input_path = args.input
@@ -100,11 +105,11 @@ def main():
     #K.set_session(sess)
     
     #model = WideResNet(image_size, depth=22, k=k)()
-    model = MyModel(image_size)()
-    adam = Adam(lr=0.1)
-    sgd = SGD(lr=0.001, momentum=0.9, nesterov=True, decay=0.00001)
-    model.compile(optimizer=sgd, loss="categorical_crossentropy",
-                  metrics=['accuracy','MAE'])
+    model = MyModel(image_size,trainable=False)()
+    adam = Adam(lr=0.01, decay=0.001)
+    sgd = SGD(lr=0.00001, momentum=0.9, nesterov=True, decay=0.0001)
+    model.compile(optimizer=sgd, loss=["categorical_crossentropy","MSE"],loss_weights=[0.5,1.0],
+                  metrics=['accuracy'])
 
     logging.debug("Model summary...")
     model.count_params()
@@ -126,15 +131,15 @@ def main():
         validation_split=0.2)
     
     train_generator = train_datagen.flow_from_directory(
-        '../../dataset/wiki_crop/new_database/',
+        '../../dataset/imdb_crop/new_database/',
         target_size=(image_size, image_size),
         batch_size=batch_size,
         class_mode='categorical',
         subset='training',
         shuffle=True)
-    
+    print(next(train_generator)[1].shape)
     val_generator = train_datagen.flow_from_directory(
-        '../../dataset/wiki_crop/new_database/',
+        '../../dataset/imdb_crop/new_database/',
         target_size=(image_size, image_size),
         batch_size=batch_size,
         class_mode='categorical',
@@ -151,9 +156,9 @@ def main():
     
 
     
-    class_weight = get_class_weights(train_generator.classes)
+    #class_weight = get_class_weights(train_generator.classes)
     
-    print(class_weight)
+    #print(class_weight)
     
     h = model.fit_generator(
         generate_data_generator(train_generator),
@@ -161,6 +166,8 @@ def main():
         epochs=10,
         validation_data=generate_data_generator(val_generator),
         workers=12,
+        steps_per_epoch = len(train_generator.classes)/batch_size,
+        validation_steps = len(val_generator.classes)/batch_size,
         #class_weight=class_weight
     )
 

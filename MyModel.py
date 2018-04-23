@@ -11,6 +11,8 @@ from keras.layers.normalization import BatchNormalization
 from keras.regularizers import l2
 from keras import backend as K
 
+from keras.models import Sequential
+
 from keras.layers import Lambda, concatenate
 import tensorflow as tf
 
@@ -76,27 +78,44 @@ def multi_gpu_model(model, gpus):
 
 
 class MyModel:
-    def __init__(self, image_size, nb_class=101):
+    def __init__(self, image_size, nb_class=101, trainable= False):
         self.nb_class = nb_class
         self.image_size = image_size
         if nb_class > 1:
             self.activation = "softmax"
         else:
             self.activation = "none"
+        self.trainable = trainable
+        self.model = None
+    
+    def get_model():
+        return self.model
+    
+    def load_model(path):
+        model.load_weights(path);
+        
+    def get_cnn():
+        if self.vgg_model_size is not None and self.model is not None:
+            return self.model.layers[:self.vgg_model_size]
+        
+    def get_vgg_face(model_type = 'vgg16'):
+        return VGGFace(include_top=False, model=model_type, input_shape=(self.image_size, self.image_size, 3), pooling='avg')
     
     def __call__(self):
         logging.debug("Creating model...")
         
-        os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
+        os.environ["CUDA_VISIBLE_DEVICES"]="1"
         
         nb_class = 101
         vgg_model = VGGFace(include_top=False, input_shape=(self.image_size, self.image_size, 3), pooling='avg')
 
         out = vgg_model.layers[-1].output
         
+        self.vgg_model_size = len(vgg_model.layers) 
+        
         for layer in vgg_model.layers:
-            layer.trainable = False
-            
+            layer.trainable = self.trainable
+        
         x = Dense(units=4096,kernel_regularizer=l2(0.0005),kernel_initializer="he_normal", activation="relu")(out)
         x = Dropout(0.5)(x)
         x = Dense(units=4096,kernel_regularizer=l2(0.0005),kernel_initializer="he_normal", activation="relu")(x)
@@ -104,12 +123,16 @@ class MyModel:
         class_pred = Dense(units=101, kernel_initializer="he_normal", use_bias=False,
                               kernel_regularizer=l2(0.0005), activation="softmax",
                               name="pred_age")(x)
-        regression = Dense(units=1, name="regress_age")(x)
-
-        model = Model(vgg_model.input, [class_pred,regression])
         
-        #model.load_weights("models/WRN_16_8.h5");
+        
+        regression = Dense(units=1,kernel_initializer='normal', name="regress_age")(out)
 
+        model = Model(vgg_model.input, outputs=[class_pred,regression])
+        
+
+        #model = multi_gpu_model(model,gpus=2)
+        #if self.trainable:
+        #    model.load_weights("models/WRN_16_8.h5");
+        
         return model
-        
         
