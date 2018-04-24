@@ -14,6 +14,8 @@ def get_args():
                         help="path to dataset folder")
     parser.add_argument("--db", "-m", type=str, required=True,
                         help="name of the mat file")
+    parser.add_argument('--folders', dest='fold', action='store_true')
+    parser.set_defaults(folders=False)
     args = parser.parse_args()
     return args
 
@@ -33,10 +35,11 @@ def main():
         os.makedirs(newdb_path)
         
     #create a folder for every age
-    for i in range(101):
-        new_folder_path = newdb_path + ('%03d' % i)
-        if not os.path.exists(new_folder_path):
-            os.makedirs(new_folder_path) 
+    if args.folders:
+        for i in range(101):
+            new_folder_path = newdb_path + ('%03d' % i)
+            if not os.path.exists(new_folder_path):
+                os.makedirs(new_folder_path) 
             
     
     full_path, dob, gender, photo_taken, face_score, second_face_score, age = get_meta(mat_path, db)
@@ -64,7 +67,16 @@ def main():
         img = image[face_locations[0]:face_locations[2],face_locations[3]:face_locations[1],:]
         
         resized_image = cv2.resize(img, (224, 224)) 
-        cv2.imwrite(newdb_path + ('%03d' % age[i]) + "/" + full_path[i][0].split('/')[-1], resized_image)
+        
+        name_of_file = full_path[i][0].split('/')[-1].split('.')[0]
+        
+        new_name = name_of_file + "A" + str(age[i]) + ".jpg"
+        
+        
+        if args.folders:
+            cv2.imwrite(newdb_path + ('%03d' % age[i]) + "/" + new_name, resized_image)
+        else:
+            cv2.imwrite(newdb_path + new_name, resized_image)
 
 if __name__ == '__main__':
     main()

@@ -106,7 +106,7 @@ class MyModel:
         
         os.environ["CUDA_VISIBLE_DEVICES"]="1"
         
-        nb_class = 101
+        
         vgg_model = VGGFace(include_top=False, input_shape=(self.image_size, self.image_size, 3), pooling='avg')
 
         out = vgg_model.layers[-1].output
@@ -120,12 +120,14 @@ class MyModel:
         x = Dropout(0.5)(x)
         x = Dense(units=4096,kernel_regularizer=l2(0.0005),kernel_initializer="he_normal", activation="relu")(x)
         x = Dropout(0.5)(x)
-        class_pred = Dense(units=101, kernel_initializer="he_normal", use_bias=False,
+        class_pred = Dense(units=self.nb_class, kernel_initializer="he_normal", use_bias=False,
                               kernel_regularizer=l2(0.0005), activation="softmax",
                               name="pred_age")(x)
         
         
-        regression = Dense(units=1,kernel_initializer='normal', name="regress_age")(out)
+        x = Dense(units=200,kernel_regularizer=l2(0.0005), activation="relu")(out)
+        x = Dropout(0.5)(x)
+        regression = Dense(units=1,kernel_initializer='normal', name="regress_age")(x)
 
         model = Model(vgg_model.input, outputs=[class_pred,regression])
         
