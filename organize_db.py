@@ -3,9 +3,9 @@ import argparse
 import scipy.io
 import numpy as np
 import cv2
+import face_recognition
 from utils import get_meta
 from tqdm import tqdm
-import face_recognition
 
 def get_args():
     parser = argparse.ArgumentParser(description="This script seperates the dataset into age folders",
